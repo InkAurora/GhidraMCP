@@ -5,6 +5,7 @@ import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.GlobalNamespace;
 import ghidra.program.model.listing.*;
+import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.program.model.mem.MemoryBlock;
 import ghidra.program.model.symbol.*;
 import ghidra.program.model.symbol.ReferenceManager;
@@ -55,6 +56,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.security.InvalidParameterException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -215,6 +217,18 @@ public class GhidraMCPPlugin extends Plugin {
             Map<String, String> qparams = parseQueryParams(exchange);
             String address = qparams.get("address");
             sendResponse(exchange, decompileFunctionByAddress(address));
+        });
+
+        server.createContext("/create_signature", exchange -> {
+            Map<String, String> params = parsePostParams(exchange);
+            String functionAddress = params.get("function_address");
+            sendResponse(exchange, createSignature(functionAddress));
+        });
+
+        server.createContext("/find_signature", exchange -> {
+            Map<String, String> params = parsePostParams(exchange);
+            String signature = params.get("signature");
+            sendResponse(exchange, findSignature(signature));
         });
 
         server.createContext("/disassemble_function", exchange -> {
@@ -763,6 +777,66 @@ public class GhidraMCPPlugin extends Plugin {
     }
 
     /**
+     * Create a refined signature for the current function or a function at the given address.
+     */
+    private String createSignature(String functionAddress) {
+        Program program = getCurrentProgram();
+        if (program == null) return "No program loaded";
+
+        try {
+            Function function = resolveSignatureFunction(program, functionAddress);
+            if (function == null) {
+                if (functionAddress == null || functionAddress.trim().isEmpty()) {
+                    return "No function at current location";
+                }
+                return "No function found at or containing address " + functionAddress;
+            }
+
+            String signature = SignatureUtils.createUniqueSignature(program, function, new ConsoleTaskMonitor());
+            return String.format("Function: %s at %s\nSignature: %s",
+                function.getName(),
+                function.getEntryPoint(),
+                signature);
+        } catch (IllegalArgumentException e) {
+            return e.getMessage();
+        } catch (SignatureUtils.SignatureGenerationException | MemoryAccessException e) {
+            return "Failed to create signature: " + e.getMessage();
+        } catch (Exception e) {
+            return "Error creating signature: " + e.getMessage();
+        }
+    }
+
+    /**
+     * Find the first address matching a signature and include the containing function when available.
+     */
+    private String findSignature(String signature) {
+        Program program = getCurrentProgram();
+        if (program == null) return "No program loaded";
+        if (signature == null || signature.trim().isEmpty()) return "Signature is required";
+
+        try {
+            Address address = SignatureUtils.findAddressForSignature(program, signature, new ConsoleTaskMonitor());
+            if (address == null) {
+                return "Signature not found";
+            }
+
+            Function function = getFunctionForAddress(program, address);
+            if (function == null) {
+                return "Found signature at: " + address + "\nWarning: The address found is not inside a function";
+            }
+
+            return String.format("Found signature at: %s\nFunction: %s at %s",
+                address,
+                function.getName(),
+                function.getEntryPoint());
+        } catch (InvalidParameterException e) {
+            return "Failed to find signature: " + e.getMessage();
+        } catch (Exception e) {
+            return "Error finding signature: " + e.getMessage();
+        }
+    }
+
+    /**
      * List all functions in the database
      */
     private String listFunctions() {
@@ -789,6 +863,32 @@ public class GhidraMCPPlugin extends Plugin {
             func = program.getFunctionManager().getFunctionContaining(addr);
         }
         return func;
+    }
+
+    /**
+     * Resolve a function for signature creation using either the current location or an explicit address.
+     */
+    private Function resolveSignatureFunction(Program program, String functionAddress) {
+        if (functionAddress == null || functionAddress.trim().isEmpty()) {
+            CodeViewerService service = tool.getService(CodeViewerService.class);
+            if (service == null) {
+                return null;
+            }
+
+            ProgramLocation location = service.getCurrentLocation();
+            if (location == null) {
+                return null;
+            }
+
+            return program.getFunctionManager().getFunctionContaining(location.getAddress());
+        }
+
+        Address address = program.getAddressFactory().getAddress(functionAddress);
+        if (address == null) {
+            throw new IllegalArgumentException("Invalid address: " + functionAddress);
+        }
+
+        return getFunctionForAddress(program, address);
     }
 
     /**

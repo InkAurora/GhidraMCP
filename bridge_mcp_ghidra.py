@@ -287,6 +287,35 @@ def list_strings(offset: int = 0, limit: int = 2000, filter: str = None) -> list
         params["filter"] = filter
     return safe_get("strings", params)
 
+@mcp.tool()
+def create_signature(function_address: str = None) -> str:
+    """
+    Create a refined unique byte signature for the current function or a function at the given address.
+
+    Args:
+        function_address: Optional function address in hex format. If omitted, uses the current function in Ghidra.
+
+    Returns:
+        The generated signature together with the source function context.
+    """
+    data = {}
+    if function_address:
+        data["function_address"] = function_address
+    return safe_post("create_signature", data)
+
+@mcp.tool()
+def find_signature(signature: str) -> str:
+    """
+    Find the first address matching a byte signature pattern.
+
+    Args:
+        signature: Space-delimited byte signature with ? wildcards.
+
+    Returns:
+        The first matching address and the containing function when available.
+    """
+    return safe_post("find_signature", {"signature": signature})
+
 def main():
     parser = argparse.ArgumentParser(description="MCP server for Ghidra")
     parser.add_argument("--ghidra-server", type=str, default=DEFAULT_GHIDRA_SERVER,

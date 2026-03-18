@@ -20,6 +20,8 @@ MCP Server + Ghidra Plugin
 - Decompile and analyze binaries in Ghidra
 - Automatically rename methods and data
 - List methods, classes, imports, and exports
+- Generate refined byte signatures for the current function or a supplied address
+- Resolve signature patterns back to addresses and containing functions
 
 # Installation
 
@@ -97,6 +99,27 @@ Another MCP client that supports multiple models on the backend is [5ire](https:
 1. Tool Key: ghidra
 2. Name: GhidraMCP
 3. Command: `python /ABSOLUTE_PATH_TO/bridge_mcp_ghidra.py`
+
+## Signature Tools
+
+GhidraMCP now exposes Sigga-style signature generation and lookup through two MCP tools:
+
+- `create_signature(function_address=None)` generates a refined, unique byte signature for the current function in Ghidra or for a specific function address.
+- `find_signature(signature)` searches for the first matching address and reports the containing function when one exists.
+
+Signature strings use space-delimited hex bytes with `?` wildcards, for example:
+
+```text
+48 89 5C 24 ? 57 48 83 EC ?
+```
+
+Typical usage:
+
+```text
+create_signature()
+create_signature("0x1400010a0")
+find_signature("48 89 5C 24 ? 57 48 83 EC ?")
+```
 
 # Building from Source
 1. Copy the following files from your Ghidra directory to this project's `lib/` directory:
