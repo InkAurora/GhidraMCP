@@ -20,6 +20,7 @@ MCP Server + Ghidra Plugin
 - Decompile and analyze binaries in Ghidra
 - Automatically rename methods and data
 - List methods, classes, imports, and exports
+- Optionally hide unnamed auto-generated functions from `list_functions`
 - Generate refined byte signatures for the current function or a supplied address
 - Resolve signature patterns back to addresses and containing functions
 

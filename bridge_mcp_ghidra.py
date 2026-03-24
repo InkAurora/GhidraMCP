@@ -169,11 +169,17 @@ def get_current_function() -> str:
     return "\n".join(safe_get("get_current_function"))
 
 @mcp.tool()
-def list_functions() -> list:
+def list_functions(include_unnamed: bool = True) -> list:
     """
     List all functions in the database.
+
+    Args:
+        include_unnamed: When false, omit auto-named functions such as FUN_<addr>.
+
+    Returns:
+        List of function names with their entry addresses.
     """
-    return safe_get("list_functions")
+    return safe_get("list_functions", {"include_unnamed": str(include_unnamed).lower()})
 
 @mcp.tool()
 def decompile_function_by_address(address: str) -> str:

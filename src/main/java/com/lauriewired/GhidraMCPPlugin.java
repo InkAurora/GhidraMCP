@@ -210,7 +210,9 @@ public class GhidraMCPPlugin extends Plugin {
         });
 
         server.createContext("/list_functions", exchange -> {
-            sendResponse(exchange, listFunctions());
+            Map<String, String> qparams = parseQueryParams(exchange);
+            boolean includeUnnamed = parseBooleanOrDefault(qparams.get("include_unnamed"), true);
+            sendResponse(exchange, listFunctions(includeUnnamed));
         });
 
         server.createContext("/decompile_function", exchange -> {
@@ -837,20 +839,31 @@ public class GhidraMCPPlugin extends Plugin {
     }
 
     /**
-     * List all functions in the database
+     * List all functions in the database.
      */
-    private String listFunctions() {
+    private String listFunctions(boolean includeUnnamed) {
         Program program = getCurrentProgram();
         if (program == null) return "No program loaded";
 
         StringBuilder result = new StringBuilder();
         for (Function func : program.getFunctionManager().getFunctions(true)) {
+            if (!includeUnnamed && isUnnamedFunction(func)) {
+                continue;
+            }
             result.append(String.format("%s at %s\n", 
                 func.getName(), 
                 func.getEntryPoint()));
         }
 
         return result.toString();
+    }
+
+    private boolean isUnnamedFunction(Function function) {
+        String functionName = function.getName();
+        String defaultName = "FUN_" + function.getEntryPoint().toString();
+
+        return functionName.equals(defaultName)
+            || functionName.equals("thunk_" + defaultName);
     }
 
     /**
@@ -1704,6 +1717,16 @@ public class GhidraMCPPlugin extends Plugin {
         catch (NumberFormatException e) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Parse a boolean from a string, or return defaultValue if null/invalid.
+     */
+    private boolean parseBooleanOrDefault(String val, boolean defaultValue) {
+        if (val == null) return defaultValue;
+        if ("true".equalsIgnoreCase(val)) return true;
+        if ("false".equalsIgnoreCase(val)) return false;
+        return defaultValue;
     }
 
     /**
